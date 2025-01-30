@@ -153,11 +153,11 @@ async def liqcalc(clearing_house: DriftClient):
                 balance = tokens / (10 ** market.decimals)
                 
                 spot_data.append({
-                    "name": get_market_name(market),
-                    "balance": balance,
-                    "price ($)": oracle_price,
-                    "liquidation_price ($)": float(user.get_spot_liq_price(pos.market_index)) / 1e6,
-                    "net_value ($)": balance * oracle_price
+                    "Name": get_market_name(market),
+                    "Balance": balance,
+                    "Net value ($)": balance * oracle_price,
+                    "Price ($)": oracle_price,
+                    "Liquidation price ($)": float(user.get_spot_liq_price(pos.market_index)) / 1e6,
                 })
 
         # Process perp positions  
@@ -170,11 +170,11 @@ async def liqcalc(clearing_house: DriftClient):
                 base_size = pos.base_asset_amount / 1e9
 
                 perp_data.append({
-                    "name": get_market_name(market),
-                    "base_size": base_size,
-                    "price ($)": oracle_price,
-                    "liquidation_price ($)": float(user.get_perp_liq_price(pos.market_index)) / 1e6,
-                    "notional ($)": base_size * oracle_price
+                    "Name": get_market_name(market),
+                    "Base size": base_size,
+                    "Notional ($)": base_size * oracle_price,
+                    "Price ($)": oracle_price,
+                    "Liquidation price ($)": float(user.get_perp_liq_price(pos.market_index)) / 1e6,
                 })
 
         # Display results
@@ -184,9 +184,9 @@ async def liqcalc(clearing_house: DriftClient):
             if spot_data:
                 st.markdown("#### Spot Positions")
                 spot_df = pd.DataFrame(spot_data)
-                spot_df['price ($)'] = spot_df['price ($)'].round(2)
-                spot_df['liquidation_price ($)'] = spot_df['liquidation_price ($)'].round(2)
-                spot_df['net_value ($)'] = spot_df['net_value ($)'].round(2)
+                spot_df['Net value ($)'] = spot_df['Net value ($)'].round(2)
+                spot_df['Price ($)'] = spot_df['Price ($)'].round(2)
+                spot_df['Liquidation price ($)'] = spot_df['Liquidation price ($)'].round(2)
                 st.dataframe(spot_df, use_container_width=True)
             else:
                 st.info("No spot positions to display")
@@ -195,9 +195,9 @@ async def liqcalc(clearing_house: DriftClient):
             if perp_data:
                 st.markdown("#### Perp Positions")
                 perp_df = pd.DataFrame(perp_data)
-                perp_df['price ($)'] = perp_df['price ($)'].round(2)
-                perp_df['liquidation_price ($)'] = perp_df['liquidation_price ($)'].round(2)
-                perp_df['notional ($)'] = perp_df['notional ($)'].round(2)
+                perp_df['Notional ($)'] = perp_df['Notional ($)'].round(2)
+                perp_df['Price ($)'] = perp_df['Price ($)'].round(2)
+                perp_df['Liquidation price ($)'] = perp_df['Liquidation price ($)'].round(2)
                 st.dataframe(perp_df, use_container_width=True)
             else:
                 st.info("No perp positions to display")
