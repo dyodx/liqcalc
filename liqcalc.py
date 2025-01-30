@@ -7,6 +7,7 @@ from driftpy.drift_client import DriftClient
 from driftpy.drift_user import DriftUser
 from driftpy.account_subscription_config import AccountSubscriptionConfig
 from driftpy.oracles.oracle_id import get_oracle_id
+from driftpy.addresses import get_user_stats_account_public_key, get_user_account_public_key
 
 def get_market_name(market):
     return bytes(market.name).decode('utf-8').strip('\x00')
@@ -14,32 +15,43 @@ def get_market_name(market):
 async def liqcalc(clearing_house: DriftClient):
     st.title("Liquidation Calculator")
     
-    user_pk = st.text_input(
-        "User Account",
-        help="Enter the authority address to analyze positions"
+    authority_address = st.text_input(
+        "Authority address",
+        help="Enter authority address to analyze positions"
     )
 
-    if not user_pk or len(user_pk) < 44:
-        st.warning("Please enter a valid user account address")
+    if not authority_address or len(authority_address) < 44:
+        st.warning("Please enter a valid authority address")
         return
 
     try:
-        user_pubkey = Pubkey.from_string(str(user_pk).strip())
+        authority_pubkey = Pubkey.from_string(str(authority_address).strip())
         
         # Initialize market data
         if 'clearing_house_cache' not in st.session_state:
             with st.spinner("Initializing market data..."):
                 await clearing_house.account_subscriber.update_cache()
                 st.session_state.clearing_house_cache = clearing_house.account_subscriber.cache
-            st.success("Market data updated!")
 
         # Create working copy of cache containing data from initial RPC calls
         clearing_house.account_subscriber.cache = copy.deepcopy(st.session_state.clearing_house_cache)
+
+        # Subaccount selection
+        user_stats_pubkey = get_user_stats_account_public_key(clearing_house.program_id, authority_pubkey)
+        user_stats = await clearing_house.program.account["UserStats"].fetch(user_stats_pubkey)
+        subaccount_options = list(range(user_stats.number_of_sub_accounts_created))
+        selected_subaccount = st.selectbox(
+            "Select Subaccount",
+            subaccount_options,
+            format_func=lambda x: f"Subaccount {x}",
+            help="Select which subaccount to analyze"
+        )
+        user_account_pubkey = get_user_account_public_key(clearing_house.program_id, authority_pubkey, selected_subaccount)
         
         # Initialize user 
         user = DriftUser(
             clearing_house,
-            user_public_key=user_pubkey,
+            user_public_key=user_account_pubkey,
             account_subscription=AccountSubscriptionConfig("cached"),
         )
         await user.account_subscriber.update_cache()
@@ -138,14 +150,14 @@ async def liqcalc(clearing_house: DriftClient):
             
             if oracle_price_data:
                 oracle_price = float(oracle_price_data.price) / 1e6
-                liq_price = float(user.get_spot_liq_price(pos.market_index)) / 1e6
+                balance = tokens / (10 ** market.decimals)
                 
                 spot_data.append({
                     "name": get_market_name(market),
-                    "balance": tokens / (10 ** market.decimals),
-                    "current_price ($)": oracle_price,
-                    "liquidation_price ($)": liq_price,
-                    "net_value ($)": tokens * oracle_price / (10 ** market.decimals)
+                    "balance": balance,
+                    "price ($)": oracle_price,
+                    "liquidation_price ($)": float(user.get_spot_liq_price(pos.market_index)) / 1e6,
+                    "net_value ($)": balance * oracle_price
                 })
 
         # Process perp positions  
@@ -155,14 +167,14 @@ async def liqcalc(clearing_house: DriftClient):
             
             if oracle_price_data:
                 oracle_price = float(oracle_price_data.price) / 1e6
-                liq_price = float(user.get_perp_liq_price(pos.market_index)) / 1e6
+                base_size = pos.base_asset_amount / 1e9
 
                 perp_data.append({
                     "name": get_market_name(market),
-                    "base_size": pos.base_asset_amount / 1e9,
-                    "current_price ($)": oracle_price,
-                    "liquidation_price ($)": liq_price,
-                    "notional ($)": (pos.base_asset_amount / 1e9) * oracle_price
+                    "base_size": base_size,
+                    "price ($)": oracle_price,
+                    "liquidation_price ($)": float(user.get_perp_liq_price(pos.market_index)) / 1e6,
+                    "notional ($)": base_size * oracle_price
                 })
 
         # Display results
@@ -172,7 +184,7 @@ async def liqcalc(clearing_house: DriftClient):
             if spot_data:
                 st.markdown("#### Spot Positions")
                 spot_df = pd.DataFrame(spot_data)
-                spot_df['current_price ($)'] = spot_df['current_price ($)'].round(2)
+                spot_df['price ($)'] = spot_df['price ($)'].round(2)
                 spot_df['liquidation_price ($)'] = spot_df['liquidation_price ($)'].round(2)
                 spot_df['net_value ($)'] = spot_df['net_value ($)'].round(2)
                 st.dataframe(spot_df, use_container_width=True)
@@ -183,7 +195,7 @@ async def liqcalc(clearing_house: DriftClient):
             if perp_data:
                 st.markdown("#### Perp Positions")
                 perp_df = pd.DataFrame(perp_data)
-                perp_df['current_price ($)'] = perp_df['current_price ($)'].round(2)
+                perp_df['price ($)'] = perp_df['price ($)'].round(2)
                 perp_df['liquidation_price ($)'] = perp_df['liquidation_price ($)'].round(2)
                 perp_df['notional ($)'] = perp_df['notional ($)'].round(2)
                 st.dataframe(perp_df, use_container_width=True)
