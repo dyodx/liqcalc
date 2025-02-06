@@ -125,6 +125,7 @@ async def liqcalc(clearing_house: DriftClient):
             }
         )
 
+    max_spot_decimals = 0
     for pos in spot_positions:
         market = user.get_spot_market_account(pos.market_index)
         oracle_key = get_oracle_id(market.oracle, market.oracle_source)
@@ -138,6 +139,7 @@ async def liqcalc(clearing_house: DriftClient):
                 "index": pos.market_index,
             }
         )
+        max_spot_decimals = max(max_spot_decimals, market.decimals)
 
     # Price adjustment controls
     st.radio(
@@ -237,7 +239,7 @@ async def liqcalc(clearing_house: DriftClient):
                 f"{get_market_name(market)} balance",
                 step=1.0,
                 key=value_key,
-                # format=f"%.{abs(decimal.Decimal(str(st.session_state[value_key])).as_tuple().exponent)}f",
+                format=f"%.{market.decimals}f",
             )
 
             collateral_changes[pos.market_index] = {
@@ -387,7 +389,20 @@ async def liqcalc(clearing_house: DriftClient):
             spot_df["Net value ($)"] = spot_df["Net value ($)"].round(2)
             spot_df["Price ($)"] = spot_df["Price ($)"].round(2)
             spot_df["Liquidation price ($)"] = spot_df["Liquidation price ($)"].round(2)
-            st.dataframe(spot_df, use_container_width=True)
+            st.dataframe(
+                spot_df,
+                column_config={
+                    "Balance": st.column_config.NumberColumn(
+                        format=f"%.{max_spot_decimals}f"
+                    ),
+                    "Net value ($)": st.column_config.NumberColumn(format="%.2f"),
+                    "Price ($)": st.column_config.NumberColumn(format="%.2f"),
+                    "Liquidation price ($)": st.column_config.NumberColumn(
+                        format="%.2f"
+                    ),
+                },
+                use_container_width=True,
+            )
         else:
             st.info("No spot positions to display")
 
@@ -398,7 +413,18 @@ async def liqcalc(clearing_house: DriftClient):
             perp_df["Notional ($)"] = perp_df["Notional ($)"].round(2)
             perp_df["Price ($)"] = perp_df["Price ($)"].round(2)
             perp_df["Liquidation price ($)"] = perp_df["Liquidation price ($)"].round(2)
-            st.dataframe(perp_df, use_container_width=True)
+            st.dataframe(
+                perp_df,
+                column_config={
+                    "Base size": st.column_config.NumberColumn(format=f"%.9f"),
+                    "Notional ($)": st.column_config.NumberColumn(format="%.2f"),
+                    "Price ($)": st.column_config.NumberColumn(format="%.2f"),
+                    "Liquidation price ($)": st.column_config.NumberColumn(
+                        format="%.2f"
+                    ),
+                },
+                use_container_width=True,
+            )
         else:
             st.info("No perp positions to display")
 
