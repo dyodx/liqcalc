@@ -14,14 +14,13 @@ def get_market_name(market):
 
 async def liqcalc(clearing_house: DriftClient):
     st.title("Liquidation Calculator")
-    
     # Get authority address
     authority_address = st.text_input(
         "Authority address",
         help="Enter authority address to analyze positions"
     )
     if authority_address:
-        if len(authority_address) < 44:
+        if len(authority_address) < 5:
             st.warning("Please enter a valid authority address")
             return
     else:
@@ -60,10 +59,14 @@ async def liqcalc(clearing_house: DriftClient):
         user_public_key=user_account_pubkey,
         account_subscription=AccountSubscriptionConfig("cached"),
     )
-    if 'user_and_slot' not in st.session_state:
+    if 'subaccount' not in st.session_state or st.session_state.subaccount != selected_subaccount:
         with st.spinner("Initializing user data..."):
             await user.account_subscriber.update_cache()
-            st.session_state.user_and_slot= user.account_subscriber.user_and_slot
+            st.session_state.subaccount = selected_subaccount
+            st.session_state.user_and_slot = user.account_subscriber.user_and_slot
+            if not st.session_state.user_and_slot:
+                st.info("No data found for this subaccount")
+                return
 
     # Create working copy of user cache containing data from initial RPC calls
     user.account_subscriber.user_and_slot = copy.deepcopy(st.session_state.user_and_slot)
